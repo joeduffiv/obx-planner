@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>OBX Packing Planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    /* Coastal palette pulled from La Dolce Vita - navy house, teal pool, terracotta accents, sandy deck */
+    --duffs: #1e3a5f;       /* deep ocean navy (house) */
+    --duffs-ink: #16304f;
+    --flauds: #2a7f8e;      /* teal pool water */
+    --flauds-ink: #1f6675;
+    --melnicks: #c76b3a;    /* warm terracotta sunset */
+    --melnicks-ink: #a9552a;
+    --bg: #faf6ef;          /* warm cream / sand */
+    --card: #ffffff;
+    --border: #e5dcc9;      /* bleached driftwood */
+    --text: #1e3a5f;        /* navy ink */
+    --muted: #8a7f6c;
+    --accent: #d6b170;      /* sandy gold */
+    --ink-dark: #0f2338;    /* deep navy for section headers */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; background: var(--bg); color: var(--text);
+    font-size: 16px;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  button, input { font-family: inherit; }
+
+  /* ----- HEADER WITH HERO HOUSE PHOTO ----- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background-color: #0f2338;
+    background-image:
+      linear-gradient(180deg, rgba(15,35,56,0.35) 0%, rgba(15,35,56,0.78) 70%, rgba(15,35,56,0.92) 100%),
+      url('./house.jpg');
+    background-size: cover;
+    background-position: center 35%;
+    color: #fff;
+    padding: 22px 20px 20px;
+    display: flex; align-items: flex-end; justify-content: space-between;
+    min-height: 180px;
+    box-shadow: 0 2px 12px rgba(15,35,56,0.25);
+  }
+  header::before {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, transparent 0%, transparent 60%, rgba(15,35,56,0.5) 100%);
+    pointer-events: none;
+  }
+  header > div, header > button { position: relative; z-index: 2; }
+  header h1 {
+    margin: 0; font-size: 26px; font-weight: 800;
+    letter-spacing: -0.3px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    font-family: Georgia, "Times New Roman", serif;
+  }
+  .house-name {
+    margin: 0 0 2px; font-size: 12px; font-weight: 700;
+    letter-spacing: 2.2px; text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+  header p { margin: 4px 0 0; opacity: 0.9; font-size: 13px; }
+  .header-pills {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    margin-top: 10px;
+  }
+  .rental-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px;
+    background: rgba(255,255,255,0.18);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255,255,255,0.35);
+    color: #fff;
+    border-radius: 999px; text-decoration: none;
+    font-size: 13px; font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  .rental-link:hover, .rental-link:active { background: rgba(255,255,255,0.3); }
+  .countdown-pill {
+    display: inline-flex; align-items: baseline; gap: 6px;
+    padding: 7px 14px;
+    background: var(--accent);
+    color: var(--ink-dark);
+    border-radius: 999px;
+    font-size: 13px; font-weight: 700;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    letter-spacing: 0.2px;
+  }
+  .countdown-num { font-size: 16px; font-weight: 800; }
+  .countdown-pill.during-trip {
+    background: var(--melnicks);
+    color: #fff;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .countdown-pill.past-trip {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 2px 8px rgba(199,107,58,0.4); }
+    50% { box-shadow: 0 2px 16px rgba(199,107,58,0.7); }
+  }
+  .menu-btn {
+    background: rgba(255,255,255,0.18); color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    width: 44px; height: 44px; border-radius: 10px;
+    font-size: 22px; cursor: pointer; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .menu-btn:hover { background: rgba(255,255,255,0.3); }
+
+  /* ----- FILTER BAR ----- */
+  .filter-bar {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 10px 12px; position: sticky; top: 180px; z-index: 15;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(30,58,95,0.06);
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-btn {
+    background: #fff; border: 1.5px solid var(--border);
+    padding: 9px 14px; border-radius: 999px;
+    font-size: 14px; font-weight: 600; color: var(--text);
+    cursor: pointer; margin-right: 6px;
+    transition: all 0.15s ease;
+  }
+  .filter-btn.active { background: var(--ink-dark); color: #fff; border-color: var(--ink-dark); }
+  .filter-btn.duffs.active { background: var(--duffs); border-color: var(--duffs); }
+  .filter-btn.flauds.active { background: var(--flauds); border-color: var(--flauds); }
+  .filter-btn.melnicks.active { background: var(--melnicks); border-color: var(--melnicks); }
+  .filter-btn .badge {
+    display: inline-block; background: #f0ead9; color: var(--muted);
+    border-radius: 10px; padding: 1px 7px; font-size: 12px;
+    margin-left: 6px; font-weight: 700; min-width: 20px; text-align: center;
+  }
+  .filter-btn.active .badge { background: rgba(255,255,255,0.25); color: #fff; }
+
+  /* ----- WEATHER STRIP ----- */
+  .weather-strip {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px 12px;
+  }
+  .weather-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 6px;
+  }
+  .weather-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .weather-link {
+    font-size: 11px; color: var(--flauds); text-decoration: none;
+    font-weight: 700; letter-spacing: 0.3px;
+  }
+  .weather-days {
+    display: flex; gap: 6px;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    padding-bottom: 2px;
+  }
+  .weather-days::-webkit-scrollbar { display: none; }
+  .weather-day {
+    flex: 0 0 auto; min-width: 64px;
+    padding: 7px 6px 6px;
+    background: #fdfaf3;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    line-height: 1.25;
+  }
+  .weather-day .wd-day {
+    font-size: 10px; color: var(--muted);
+    font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  }
+  .weather-day .wd-icon { font-size: 20px; margin: 2px 0; }
+  .weather-day .wd-temp { font-size: 12px; font-weight: 700; color: var(--text); }
+  .weather-day .wd-low { color: var(--muted); font-weight: 500; }
+  .weather-day .wd-pop { font-size: 10px; color: var(--flauds); font-weight: 700; }
+  .weather-day.trip-day {
+    background: #fff4e6;
+    border-color: var(--melnicks);
+    box-shadow: 0 2px 8px rgba(199,107,58,0.25);
+  }
+  .weather-day.trip-day .wd-day { color: var(--melnicks-ink); }
+  .weather-loading, .weather-error {
+    font-size: 13px; color: var(--muted); padding: 4px 0;
+  }
+  .weather-error a { color: var(--flauds); font-weight: 600; }
+
+  /* ----- MENU DRAWER ----- */
+  .menu-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+    z-index: 100;
+  }
+  .menu-backdrop.open { display: block; }
+  .menu-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 310px; max-width: 85vw;
+    background: #fff; z-index: 101; transform: translateX(100%);
+    transition: transform 0.25s ease;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .menu-drawer.open { transform: translateX(0); }
+  .menu-drawer-header {
+    padding: 18px 18px 10px; font-weight: 700; font-size: 16px;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+  .menu-section-label {
+    padding: 16px 18px 6px; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.6px; font-weight: 700;
+  }
+  .menu-item {
+    background: none; border: none; text-align: left;
+    padding: 14px 18px; font-size: 15px; color: var(--text);
+    cursor: pointer; border-bottom: 1px solid #f3f4f6;
+    width: 100%; display: flex; align-items: center; gap: 10px;
+  }
+  .menu-item:hover { background: #f9fafb; }
+  .menu-item .ic { font-size: 18px; width: 24px; text-align: center; }
+  .menu-item.danger { color: #dc2626; }
+
+  /* ----- CONTAINER ----- */
+  .container { max-width: 1150px; margin: 0 auto; padding: 12px; padding-bottom: 110px; }
+
+  /* ----- SECTION ----- */
+  .section {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; margin-bottom: 16px; overflow: hidden;
+    box-shadow: 0 1px 3px rgba(30,58,95,0.06), 0 4px 16px rgba(30,58,95,0.04);
+  }
+  .section-header {
+    background: linear-gradient(135deg, var(--ink-dark) 0%, var(--duffs) 100%);
+    color: #fff; padding: 13px 16px;
+    font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase;
+    font-size: 13px; display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 3px solid var(--accent);
+  }
+  .add-item-btn {
+    background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35);
+    color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px;
+    cursor: pointer; font-weight: 600;
+  }
+  .add-item-btn:active { background: rgba(255,255,255,0.3); }
+
+  /* ----- ROW — MOBILE FIRST ----- */
+  .row {
+    padding: 14px 14px;
+    border-top: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .row:first-of-type { border-top: none; }
+  .row-top {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;
+  }
+  .row-text { flex: 1; min-width: 0; }
+  .item-name {
+    font-size: 16px; font-weight: 500; color: var(--text); word-break: break-word;
+  }
+  .item-note {
+    color: var(--muted); font-size: 13px; font-style: italic; margin-top: 2px;
+  }
+  .row-icons {
+    display: flex; gap: 2px; flex-shrink: 0;
+  }
+  .icon-btn {
+    background: transparent; border: none; cursor: pointer;
+    width: 36px; height: 36px; font-size: 16px; border-radius: 8px;
+    color: var(--muted); display: flex; align-items: center; justify-content: center;
+  }
+  .icon-btn:active { background: #f3f4f6; }
+  .icon-btn.delete:active { color: #dc2626; }
+
+  .assign-group {
+    display: grid; grid-template-columns: repeat(3, 1fr) auto; gap: 6px;
+  }
+  .btn {
+    border: 2px solid transparent; background: #f7f1e3;
+    padding: 11px 0; border-radius: 10px; font-weight: 700;
+    cursor: pointer; font-size: 14px; color: var(--text);
+    min-height: 44px;
+    transition: transform 0.08s ease, box-shadow 0.15s ease;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn.duffs { border-color: var(--duffs); color: var(--duffs); }
+  .btn.duffs.active { background: var(--duffs); color: #fff; box-shadow: 0 2px 8px rgba(30,58,95,0.35); }
+  .btn.flauds { border-color: var(--flauds); color: var(--flauds); }
+  .btn.flauds.active { background: var(--flauds); color: #fff; box-shadow: 0 2px 8px rgba(42,127,142,0.35); }
+  .btn.melnicks { border-color: var(--melnicks); color: var(--melnicks); }
+  .btn.melnicks.active { background: var(--melnicks); color: #fff; box-shadow: 0 2px 8px rgba(199,107,58,0.35); }
+  .btn.clear {
+    padding: 11px 14px; color: var(--muted); font-size: 16px;
+    background: #f7f1e3; border: 1px solid var(--border);
+  }
+
+  .comment-input {
+    width: 100%; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px;
+    font-size: 15px; background: #fdfaf3;
+    color: var(--text);
+  }
+  .comment-input::placeholder { color: #b3a68d; }
+  .comment-input:focus { outline: none; border-color: var(--flauds); background: #fff; box-shadow: 0 0 0 3px rgba(42,127,142,0.15); }
+
+  /* Desktop table header — hidden on mobile */
+  .header-row { display: none; }
+
+  .empty-state {
+    padding: 50px 20px; text-align: center; color: var(--muted); font-style: italic;
+  }
+
+  /* ----- FOOTER BAR ----- */
+  .footer-bar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #fff; border-top: 1px solid var(--border);
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    display: flex; gap: 10px; align-items: center;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.06);
+    z-index: 10;
+  }
+  .download-btn {
+    flex: 1; background: linear-gradient(135deg, var(--flauds) 0%, var(--flauds-ink) 100%);
+    color: #fff; border: none;
+    padding: 14px 16px; border-radius: 12px; font-weight: 700;
+    font-size: 16px; cursor: pointer;
+    box-shadow: 0 2px 10px rgba(42,127,142,0.4);
+    min-height: 48px;
+    letter-spacing: 0.3px;
+  }
+  .download-btn:active { background: var(--flauds-ink); }
+  .footer-extra { display: none; }
+
+  /* ----- MODALS ----- */
+  .modal-backdrop {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    align-items: center; justify-content: center; z-index: 200; padding: 16px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 14px; padding: 20px; max-width: 600px;
+    width: 100%; max-height: 80vh; overflow: auto;
+  }
+  .modal h3 { margin-top: 0; }
+  .modal .link-box {
+    background: #f3f4f6; border: 1px solid var(--border); padding: 10px;
+    border-radius: 8px; word-break: break-all; font-size: 12px; font-family: monospace;
+    max-height: 160px; overflow: auto;
+  }
+  .modal .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+  .modal .modal-btn {
+    background: #fff; border: 1px solid var(--border); padding: 10px 16px;
+    border-radius: 10px; font-size: 14px; cursor: pointer; font-weight: 600; min-height: 44px;
+  }
+  .modal .modal-btn.primary { background: var(--flauds); color: #fff; border-color: var(--flauds); }
+
+  /* ----- PRINT VIEW ----- */
+  .print-view {
+    display: none; padding: 40px; max-width: 800px; margin: 0 auto;
+    font-family: Georgia, "Times New Roman", serif;
+  }
+  .print-view h1 { font-size: 28px; margin-bottom: 4px; }
+  .print-view .subtitle { color: #555; margin-bottom: 24px; }
+  .print-view .print-section { margin-bottom: 24px; }
+  .print-view .print-section h2 {
+    font-size: 16px; text-transform: uppercase; letter-spacing: 1px;
+    border-bottom: 2px solid #111; padding-bottom: 4px; margin-bottom: 10px;
+  }
+  .print-view .print-item {
+    padding: 6px 0; display: flex; align-items: baseline;
+    border-bottom: 1px dotted #ddd;
+  }
+  .print-view .print-item .checkbox {
+    width: 16px; height: 16px; border: 1.5px solid #333; margin-right: 10px;
+    display: inline-block; flex-shrink: 0;
+  }
+  .print-view .print-item .pname { flex: 1; }
+  .print-view .print-item .pnote { color: #666; font-size: 13px; margin-left: 8px; font-style: italic; }
+  .print-view .print-item .pcomment { color: #222; font-size: 13px; margin-left: 8px; }
+
+  body.printing .container,
+  body.printing header,
+  body.printing .weather-strip,
+  body.printing .filter-bar,
+  body.printing .footer-bar { display: none; }
+  body.printing .print-view { display: block; }
+
+  @media print {
+    header, .weather-strip, .filter-bar, .footer-bar, .container { display: none !important; }
+    body { background: #fff; }
+    .print-view { display: block; }
+  }
+
+  /* ================================================== */
+  /*  DESKTOP OVERRIDES — wider screens get a table view */
+  /* ================================================== */
+  @media (min-width: 820px) {
+    header {
+      padding: 30px 32px 28px;
+      min-height: 240px;
+      background-position: center 40%;
+    }
+    header h1 { font-size: 32px; }
+    .house-name { font-size: 13px; letter-spacing: 2.8px; }
+    .filter-bar { padding: 12px 20px; top: 240px; }
+    .container { padding: 20px; padding-bottom: 110px; }
+
+    .header-row {
+      display: grid;
+      grid-template-columns: 1fr 130px 320px 1fr 120px;
+      gap: 14px; padding: 10px 16px; background: #f9fafb;
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-row .rh-actions { text-align: right; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 130px 320px 1fr 120px;
+      gap: 14px; align-items: center;
+      padding: 12px 16px;
+    }
+    .row-top { display: contents; }
+    .row-text { display: contents; }
+    .row .item-name { grid-column: 1; }
+    .row .item-note { grid-column: 2; margin-top: 0; }
+    .row .assign-group {
+      grid-column: 3; display: flex; gap: 8px;
+    }
+    .row .assign-group .btn {
+      flex: 1; padding: 9px 10px; min-height: 40px;
+    }
+    .row .assign-group .btn.clear { flex: 0; padding: 9px 12px; }
+    .row > .comment-wrap { grid-column: 4; }
+    .row-icons { grid-column: 5; justify-content: flex-end; }
+
+    .download-btn { flex: 0 0 auto; padding: 12px 24px; }
+    .footer-extra { display: flex; gap: 10px; }
+    .footer-extra .print-btn {
+      background: #fff; border: 1px solid var(--border);
+      padding: 10px 14px; border-radius: 10px; font-size: 13px;
+      cursor: pointer; font-weight: 600; min-height: 44px;
+    }
+    .footer-extra .print-btn.duffs { border-color: var(--duffs); color: var(--duffs); }
+    .footer-extra .print-btn.flauds { border-color: var(--flauds); color: var(--flauds); }
+    .footer-extra .print-btn.melnicks { border-color: var(--melnicks); color: var(--melnicks); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <p class="house-name">La Dolce Vita · #993 · Hatteras</p>
+    <h1>OBX 2026 Packing Planner</h1>
+    <div class="header-pills">
+      <a class="rental-link" href="https://www.surforsound.com/hatteras-vacation-rental/property/993" target="_blank" rel="noopener">
+        <span>🏠</span><span>View rental house</span><span>↗</span>
+      </a>
+      <div class="countdown-pill" id="countdown-pill" title="Trip: June 6–13, 2026">
+        <span class="countdown-num" id="countdown-num">—</span>
+        <span class="countdown-lbl" id="countdown-lbl">days until OBX</span>
+      </div>
+    </div>
+  </div>
+  <button class="menu-btn" onclick="toggleMenu()" aria-label="Open menu">☰</button>
+</header>
+
+<div class="weather-strip" id="weather-strip">
+  <div class="weather-head">
+    <span class="weather-title">Hatteras 7-day forecast</span>
+    <a class="weather-link" href="https://forecast.weather.gov/MapClick.php?lat=35.22&lon=-75.69" target="_blank" rel="noopener">Full forecast ↗</a>
+  </div>
+  <div class="weather-days" id="weather-days">
+    <div class="weather-loading">Loading forecast…</div>
+  </div>
+</div>
+
+<div class="filter-bar" id="filter-bar">
+  <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All <span class="badge" id="b-all">0</span></button>
+  <button class="filter-btn" data-filter="unassigned" onclick="setFilter('unassigned')">Unassigned <span class="badge" id="b-unassigned">0</span></button>
+  <button class="filter-btn duffs" data-filter="duffs" onclick="setFilter('duffs')">Duffs <span class="badge" id="b-duffs">0</span></button>
+  <button class="filter-btn flauds" data-filter="flauds" onclick="setFilter('flauds')">Flauds <span class="badge" id="b-flauds">0</span></button>
+  <button class="filter-btn melnicks" data-filter="melnicks" onclick="setFilter('melnicks')">Melnicks <span class="badge" id="b-melnicks">0</span></button>
+</div>
+
+<div class="container">
+  <div id="planner"></div>
+</div>
+
+<!-- Print-only view -->
+<div class="print-view" id="print-view"></div>
+
+<!-- Bottom bar -->
+<div class="footer-bar">
+  <button class="download-btn" onclick="downloadExcel()">Download Excel</button>
+  <div class="footer-extra">
+    <button class="print-btn duffs" onclick="printFamily('duffs')">Print Duffs</button>
+    <button class="print-btn flauds" onclick="printFamily('flauds')">Print Flauds</button>
+    <button class="print-btn melnicks" onclick="printFamily('melnicks')">Print Melnicks</button>
+  </div>
+</div>
+
+<!-- Side menu -->
+<div class="menu-backdrop" id="menu-backdrop" onclick="toggleMenu()"></div>
+<div class="menu-drawer" id="menu-drawer">
+  <div class="menu-drawer-header">Menu</div>
+
+  <div class="menu-section-label">Trip info</div>
+  <a class="menu-item" href="https://www.surforsound.com/hatteras-vacation-rental/property/993" target="_blank" rel="noopener" style="text-decoration:none"><span class="ic">🏠</span>View rental house ↗</a>
+
+  <div class="menu-section-label">Print list</div>
+  <button class="menu-item" onclick="menuAction(() => printFamily('duffs'))"><span class="ic">📄</span>Print Duffs list</button>
+  <button class="menu-item" onclick="menuAction(() => printFamily('flauds'))"><span class="ic">📄</span>Print Flauds list</button>
+  <button class="menu-item" onclick="menuAction(() => printFamily('melnicks'))"><span class="ic">📄</span>Print Melnicks list</button>
+
+  <div class="menu-section-label">Share &amp; sync</div>
+  <button class="menu-item" onclick="menuAction(() => document.getElementById('excel-input').click())"><span class="ic">📥</span>Import from Excel…</button>
+  <button class="menu-item" onclick="menuAction(() => document.getElementById('json-input').click())"><span class="ic">📂</span>Load planner file…</button>
+  <button class="menu-item" onclick="menuAction(exportJson)"><span class="ic">💾</span>Save planner file</button>
+  <button class="menu-item" onclick="menuAction(copyShareLink)"><span class="ic">🔗</span>Copy share link</button>
+
+  <div class="menu-section-label">Reset</div>
+  <button class="menu-item danger" onclick="menuAction(resetToDefaults)"><span class="ic">↺</span>Reset to default list</button>
+  <input type="file" id="excel-input" accept=".xlsx,.xls" style="display:none" onchange="importFromExcel(event)">
+  <input type="file" id="json-input" accept=".json" style="display:none" onchange="importFromJson(event)">
+</div>
+
+<!-- Share link modal -->
+<div class="modal-backdrop" id="share-modal" onclick="if(event.target===this)closeShareModal()">
+  <div class="modal">
+    <h3>Share link</h3>
+    <p style="color:var(--muted);font-size:14px">
+      Send this link to another family. When they open it, they'll see the current state of the list and can continue editing on their own device.
+      For bigger lists, use "Save planner file" (emailing a .json file) instead.
+    </p>
+    <div class="link-box" id="share-link-box"></div>
+    <div class="actions">
+      <button class="modal-btn" onclick="closeShareModal()">Close</button>
+      <button class="modal-btn primary" onclick="copyLinkToClipboard()">Copy to clipboard</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================================
+//  DATA MODEL
+// ============================================================================
+const FAMILIES = ["duffs", "flauds", "melnicks"];
+const FAMILY_LABELS = { duffs: "Duffs", flauds: "Flauds", melnicks: "Melnicks" };
+const STORAGE_KEY = "obx2026-planner-v2";
+
+const DEFAULT_PLAN = [
+  { section: "MEALS", items: [
+    { id: "m1",  name: "Breakfast - each family on own/BYO" },
+    { id: "m2",  name: "Lunch - each family on own/BYO" },
+    { id: "m3",  name: "Dinner - eat in?/eat out?/" },
+    { id: "m4",  name: "Charcuterie?", note: "Sat" },
+    { id: "m5",  name: "Dinner", note: "Sun" },
+    { id: "m6",  name: "Dinner", note: "Mon" },
+    { id: "m7",  name: "Grill?", note: "Tues" },
+    { id: "m8",  name: "Dinner", note: "Wed" },
+    { id: "m9",  name: "Dinner", note: "Thurs" },
+    { id: "m10", name: "Seafood?", note: "Fri" }
+  ]},
+  { section: "POSSIBLE SHARED FOOD / SUPPLIES", items: [
+    { id: "s1",  name: "Ketchup" },
+    { id: "s2",  name: "Mustard" },
+    { id: "s3",  name: "Relish" },
+    { id: "s4",  name: "Mayo" },
+    { id: "s5",  name: "Hot sauce" },
+    { id: "s6",  name: "Salt / Pepper" },
+    { id: "s7",  name: "Other spices" },
+    { id: "s8",  name: "Cooking spray" },
+    { id: "s9",  name: "Butter" },
+    { id: "s10", name: "Aluminum foil" },
+    { id: "s11", name: "Ziplock bags" },
+    { id: "s12", name: "Garbage bags" },
+    { id: "s13", name: "Paper plates", note: "pack/family?" },
+    { id: "s14", name: "Paper towels", note: "roll/family?" },
+    { id: "s15", name: "Cups (sm and lg?)" },
+    { id: "s16", name: "Straws" },
+    { id: "s17", name: "Bowls/cups for snacks?" },
+    { id: "s18", name: "Dishwasher soap" },
+    { id: "s19", name: "Dish soap" },
+    { id: "s20", name: "Kitchen cleaner" },
+    { id: "s21", name: "Toilet paper", note: "per family?" },
+    { id: "s22", name: "Citronella candles", note: "use?" },
+    { id: "s23", name: "S'mores (fire pit @ pool)" },
+    { id: "s24", name: "Matches / lighter?" },
+    { id: "s25", name: "FlavorIce" },
+    { id: "s26", name: "Snacks", note: "per family?" },
+    { id: "s27", name: "Cheese balls, pickles, chips, etc." },
+    { id: "s28", name: "Oreos, nibs, Wilbur Buds, M&Ms, Chickaboom, chocolate chip cookies, EL Fudge" },
+    { id: "s29", name: "Fruit, veggies?" },
+    { id: "s30", name: "Dips?" }
+  ]},
+  { section: "DRINKS", items: [
+    { id: "d1",  name: "Beer", note: "BYO" },
+    { id: "d2",  name: "Wine", note: "BYO" },
+    { id: "d3",  name: "Alcohol", note: "Coordinate?" },
+    { id: "d4",  name: "Drink mixes/ers - marg, bloody mary, juice, tonic, coke, etc.", note: "Coordinate?" },
+    { id: "d5",  name: "Garnish - lemon, lime, celery, olives, etc." },
+    { id: "d6",  name: "Coffee", note: "BYO?" },
+    { id: "d7",  name: "Coffee filters" },
+    { id: "d8",  name: "Creamer" },
+    { id: "d9",  name: "Small water bottles", note: "BYO?" },
+    { id: "d10", name: "Gallon water for coffee", note: "BYO?" },
+    { id: "d11", name: "Kids drinks / NA - gatorade, juice boxes, seltzer, etc.", note: "Coordinate?" },
+    { id: "d12", name: "Milk" }
+  ]},
+  { section: "RECREATION", items: [
+    { id: "r1",  name: "Inside games - ahole, gaming systems, board, etc." },
+    { id: "r2",  name: "Outside games - cornhole, etc." },
+    { id: "r3",  name: "Ping pong balls" },
+    { id: "r4",  name: "Volleyball? (Net @ house)" },
+    { id: "r5",  name: "Drones?" },
+    { id: "r6",  name: "Fishing poles?" },
+    { id: "r7",  name: "Golf clubs?" },
+    { id: "r8",  name: "Bikes, scooters?" },
+    { id: "r9",  name: "Glow sticks / sparklers?" },
+    { id: "r10", name: "Firewood?" },
+    { id: "r11", name: "Rent pontoon boat?" },
+    { id: "r12", name: "Off-road vehicle pass?" }
+  ]}
+];
+
+let plan = deepClone(DEFAULT_PLAN);
+let rows = {};
+let activeFilter = "all";
+
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+function newId() { return "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+// ============================================================================
+//  PERSISTENCE
+// ============================================================================
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ plan, rows })); } catch (e) {}
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (parsed.plan && Array.isArray(parsed.plan)) plan = parsed.plan;
+    if (parsed.rows && typeof parsed.rows === "object") rows = parsed.rows;
+  } catch (e) {}
+}
+function maybeLoadFromHash() {
+  if (!location.hash || location.hash.length < 3) return false;
+  try {
+    const decoded = decodeURIComponent(atob(location.hash.slice(1)));
+    const parsed = JSON.parse(decoded);
+    if (parsed.plan && parsed.rows) {
+      if (confirm("This link contains a shared planner. Replace your current list with it?")) {
+        plan = parsed.plan; rows = parsed.rows; saveState();
+      }
+      history.replaceState(null, "", location.pathname + location.search);
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
+
+// ============================================================================
+//  RENDER
+// ============================================================================
+function getRow(id) {
+  if (!rows[id]) rows[id] = { assigned: [], comment: "" };
+  if (!Array.isArray(rows[id].assigned)) rows[id].assigned = [];
+  return rows[id];
+}
+function rowMatchesFilter(id) {
+  const r = getRow(id);
+  if (activeFilter === "all") return true;
+  if (activeFilter === "unassigned") return r.assigned.length === 0;
+  return r.assigned.includes(activeFilter);
+}
+
+function render() {
+  const container = document.getElementById("planner");
+  let html = "";
+  let anyRendered = false;
+
+  plan.forEach((sec, si) => {
+    const visibleItems = activeFilter === "all" ? sec.items : sec.items.filter(it => rowMatchesFilter(it.id));
+    if (visibleItems.length === 0) return;
+
+    html += `<div class="section">`;
+    html += `<div class="section-header"><span>${escapeHtml(sec.section)}</span>`;
+    html += `<button class="add-item-btn" onclick="addItem(${si})">+ Add item</button></div>`;
+    html += `<div class="header-row"><div>Item</div><div>Note</div><div>Assign to</div><div>Comments</div><div class="rh-actions">Edit</div></div>`;
+
+    visibleItems.forEach(it => {
+      anyRendered = true;
+      const r = getRow(it.id);
+      html += `<div class="row">`;
+      html += `<div class="row-top">`;
+      html += `<div class="row-text">`;
+      html += `<div class="item-name">${escapeHtml(it.name || "")}</div>`;
+      if (it.note) html += `<div class="item-note">${escapeHtml(it.note)}</div>`;
+      html += `</div>`;
+      html += `<div class="row-icons">`;
+      html += `<button class="icon-btn" title="Insert new item above" onclick="insertItemAbove('${it.id}')">＋</button>`;
+      html += `<button class="icon-btn" title="Rename" onclick="editItem('${it.id}')">✎</button>`;
+      html += `<button class="icon-btn delete" title="Delete" onclick="deleteItem('${it.id}')">🗑</button>`;
+      html += `</div>`;
+      html += `</div>`;
+      html += `<div class="assign-group">`;
+      FAMILIES.forEach(f => {
+        const active = r.assigned.includes(f) ? "active" : "";
+        html += `<button class="btn ${f} ${active}" onclick="toggleAssign('${it.id}','${f}')">${FAMILY_LABELS[f]}</button>`;
+      });
+      if (r.assigned.length > 0) {
+        html += `<button class="btn clear" onclick="clearRow('${it.id}')" title="Clear">✕</button>`;
+      } else {
+        html += `<span></span>`;
+      }
+      html += `</div>`;
+      html += `<div class="comment-wrap"><input class="comment-input" type="text" placeholder="Notes..." value="${escapeAttr(r.comment)}" oninput="setComment('${it.id}', this.value)"></div>`;
+      html += `</div>`;
+    });
+    html += `</div>`;
+  });
+
+  if (!anyRendered) {
+    html += `<div class="empty-state">No items match this filter.</div>`;
+  }
+
+  container.innerHTML = html;
+  updateCounts();
+  updateFilterButtons();
+}
+
+function escapeHtml(v) {
+  return (v || "").toString()
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function escapeAttr(v) { return (v || "").toString().replace(/&/g, "&amp;").replace(/"/g, "&quot;"); }
+
+function updateCounts() {
+  const counts = { duffs: 0, flauds: 0, melnicks: 0, unassigned: 0, all: 0 };
+  plan.forEach(sec => {
+    sec.items.forEach(it => {
+      counts.all++;
+      const r = getRow(it.id);
+      if (r.assigned.length === 0) counts.unassigned++;
+      r.assigned.forEach(f => { if (counts[f] !== undefined) counts[f]++; });
+    });
+  });
+  document.getElementById("b-all").textContent = counts.all;
+  document.getElementById("b-unassigned").textContent = counts.unassigned;
+  document.getElementById("b-duffs").textContent = counts.duffs;
+  document.getElementById("b-flauds").textContent = counts.flauds;
+  document.getElementById("b-melnicks").textContent = counts.melnicks;
+}
+
+function updateFilterButtons() {
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.filter === activeFilter);
+  });
+}
+
+// ============================================================================
+//  ACTIONS
+// ============================================================================
+function toggleAssign(id, family) {
+  const r = getRow(id);
+  const idx = r.assigned.indexOf(family);
+  if (idx >= 0) r.assigned.splice(idx, 1);
+  else r.assigned.push(family);
+  saveState(); render();
+}
+function clearRow(id) { getRow(id).assigned = []; saveState(); render(); }
+function setComment(id, val) { getRow(id).comment = val; saveState(); updateCounts(); }
+function setFilter(f) { activeFilter = f; render(); }
+
+function addItem(sectionIdx) {
+  const name = prompt("New item name (adds to end of section):");
+  if (!name || !name.trim()) return;
+  const note = prompt("Optional note (or leave blank):", "") || "";
+  plan[sectionIdx].items.push({ id: newId(), name: name.trim(), note: note.trim() });
+  saveState(); render();
+}
+function insertItemAbove(id) {
+  const it = findItem(id);
+  if (!it) return;
+  const name = prompt(`New item name (inserts above "${it.item.name}"):`);
+  if (!name || !name.trim()) return;
+  const note = prompt("Optional note (or leave blank):", "") || "";
+  plan[it.sectionIdx].items.splice(it.itemIdx, 0, { id: newId(), name: name.trim(), note: note.trim() });
+  saveState(); render();
+}
+function editItem(id) {
+  const it = findItem(id);
+  if (!it) return;
+  const name = prompt("Item name:", it.item.name);
+  if (name === null) return;
+  it.item.name = name.trim();
+  const note = prompt("Note (optional):", it.item.note || "");
+  if (note !== null) it.item.note = note.trim();
+  saveState(); render();
+}
+function deleteItem(id) {
+  const it = findItem(id);
+  if (!it) return;
+  if (!confirm(`Delete "${it.item.name}"?`)) return;
+  plan[it.sectionIdx].items.splice(it.itemIdx, 1);
+  delete rows[id];
+  saveState(); render();
+}
+function findItem(id) {
+  for (let si = 0; si < plan.length; si++) {
+    for (let ii = 0; ii < plan[si].items.length; ii++) {
+      if (plan[si].items[ii].id === id) return { item: plan[si].items[ii], sectionIdx: si, itemIdx: ii };
+    }
+  }
+  return null;
+}
+function resetToDefaults() {
+  if (!confirm("Reset list to default template? This erases assignments and custom items.")) return;
+  plan = deepClone(DEFAULT_PLAN); rows = {}; saveState(); render();
+}
+
+// ============================================================================
+//  EXCEL EXPORT
+// ============================================================================
+function downloadExcel() {
+  const aoa = [];
+  const HEADER = ["", "", "Per fam", "Duffs", "Flauds", "Melnicks", "Comments"];
+  plan.forEach(sec => {
+    aoa.push([sec.section, "", "", "", "", "", ""]);
+    aoa.push(HEADER.slice());
+    sec.items.forEach(it => {
+      const r = getRow(it.id);
+      const row = [it.name || "", it.note || "", "", "", "", "", r.comment || ""];
+      if (r.assigned.includes("duffs")) row[3] = "X";
+      if (r.assigned.includes("flauds")) row[4] = "X";
+      if (r.assigned.includes("melnicks")) row[5] = "X";
+      aoa.push(row);
+    });
+    aoa.push(["", "", "", "", "", "", ""]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 55 }, { wch: 15 }, { wch: 9 }, { wch: 10 }, { wch: 10 }, { wch: 11 }, { wch: 35 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "OBX 2026");
+  const today = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `OBX 2026 - ${today}.xlsx`);
+}
+
+// ============================================================================
+//  EXCEL IMPORT
+// ============================================================================
+function importFromExcel(event) {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+      parseImportedAoa(aoa);
+    } catch (err) {
+      alert("Couldn't read that file: " + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseImportedAoa(aoa) {
+  // Pattern: a family-header row (contains "Duffs") is followed by a section-title row,
+  // then item rows until the next family-header.
+  const newPlan = [];
+  const newRows = {};
+  let currentSection = null;
+  let familyCols = { duffs: -1, flauds: -1, melnicks: -1 };
+  let commentCol = -1;
+  let expectSectionNext = false;
+  const isFamilyHeader = row => row.some(c => typeof c === "string" && c.trim().toLowerCase() === "duffs");
+
+  aoa.forEach(row => {
+    if (isFamilyHeader(row)) {
+      familyCols = { duffs: -1, flauds: -1, melnicks: -1 };
+      commentCol = -1;
+      row.forEach((c, idx) => {
+        const t = (c || "").toString().trim().toLowerCase();
+        if (t === "duffs") familyCols.duffs = idx;
+        else if (t === "flauds") familyCols.flauds = idx;
+        else if (t === "melnicks") familyCols.melnicks = idx;
+        else if (t === "comments" || t === "comment") commentCol = idx;
+      });
+      expectSectionNext = true;
+      return;
+    }
+    if (expectSectionNext) {
+      expectSectionNext = false;
+      const title = (row[0] || "").toString().trim() || "SECTION";
+      currentSection = { section: title, items: [] };
+      newPlan.push(currentSection);
+      return;
+    }
+    const name = (row[0] || "").toString().trim();
+    const note = (row[1] || "").toString().trim();
+    if (!name && !note) return;
+    if (!currentSection) {
+      currentSection = { section: "IMPORTED", items: [] };
+      newPlan.push(currentSection);
+    }
+    const id = newId();
+    currentSection.items.push({ id, name: name || "(no name)", note });
+    const assigned = [];
+    FAMILIES.forEach(f => {
+      const col = familyCols[f];
+      if (col >= 0) {
+        const cell = (row[col] || "").toString().trim();
+        if (cell) assigned.push(f);
+      }
+    });
+    const comment = commentCol >= 0 ? (row[commentCol] || "").toString().trim() : "";
+    if (assigned.length || comment) newRows[id] = { assigned, comment };
+  });
+
+  if (!newPlan.length) {
+    alert("That file didn't look like a packing list — no sections found.");
+    return;
+  }
+  if (!confirm(`Import ${newPlan.reduce((n, s) => n + s.items.length, 0)} items from this file? This replaces your current list.`)) return;
+
+  plan = newPlan;
+  rows = newRows;
+  saveState(); render();
+}
+
+// ============================================================================
+//  JSON IMPORT / EXPORT
+// ============================================================================
+function exportJson() {
+  const payload = { plan, rows, exportedAt: new Date().toISOString(), version: 2 };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `OBX 2026 planner - ${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function importFromJson(event) {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed.plan || !parsed.rows) throw new Error("file is missing plan/rows");
+      if (!confirm("Replace your current planner with the contents of this file?")) return;
+      plan = parsed.plan; rows = parsed.rows; saveState(); render();
+    } catch (err) {
+      alert("Couldn't read that planner file: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+// ============================================================================
+//  SHARE LINK
+// ============================================================================
+function copyShareLink() {
+  const payload = JSON.stringify({ plan, rows });
+  const encoded = btoa(encodeURIComponent(payload));
+  const url = location.origin + location.pathname + "#" + encoded;
+  document.getElementById("share-link-box").textContent = url;
+  document.getElementById("share-modal").classList.add("show");
+}
+function closeShareModal() { document.getElementById("share-modal").classList.remove("show"); }
+function copyLinkToClipboard() {
+  const text = document.getElementById("share-link-box").textContent;
+  navigator.clipboard.writeText(text).then(
+    () => alert("Link copied."),
+    () => alert("Copy failed — select and copy manually.")
+  );
+}
+
+// ============================================================================
+//  PRINTING
+// ============================================================================
+function printFamily(family) {
+  const pv = document.getElementById("print-view");
+  const today = new Date().toLocaleDateString();
+  let html = `<h1>OBX 2026 — ${FAMILY_LABELS[family]} packing list</h1>`;
+  html += `<div class="subtitle">Printed ${today}</div>`;
+  let totalItems = 0;
+  plan.forEach(sec => {
+    const secItems = sec.items.filter(it => getRow(it.id).assigned.includes(family));
+    if (!secItems.length) return;
+    html += `<div class="print-section"><h2>${escapeHtml(sec.section)}</h2>`;
+    secItems.forEach(it => {
+      const r = getRow(it.id);
+      html += `<div class="print-item"><span class="checkbox"></span>`;
+      html += `<span class="pname">${escapeHtml(it.name)}</span>`;
+      if (it.note) html += `<span class="pnote">${escapeHtml(it.note)}</span>`;
+      if (r.comment) html += `<span class="pcomment">— ${escapeHtml(r.comment)}</span>`;
+      html += `</div>`;
+      totalItems++;
+    });
+    html += `</div>`;
+  });
+  if (!totalItems) html += `<p><em>No items assigned to ${FAMILY_LABELS[family]} yet.</em></p>`;
+  pv.innerHTML = html;
+  document.body.classList.add("printing");
+  window.print();
+  setTimeout(() => document.body.classList.remove("printing"), 300);
+  window.addEventListener("afterprint", () => document.body.classList.remove("printing"), { once: true });
+}
+
+// ============================================================================
+//  MENU DRAWER
+// ============================================================================
+function toggleMenu() {
+  document.getElementById("menu-drawer").classList.toggle("open");
+  document.getElementById("menu-backdrop").classList.toggle("open");
+}
+function menuAction(fn) {
+  toggleMenu();
+  setTimeout(fn, 200);
+}
+
+// ============================================================================
+//  TRIP COUNTDOWN — June 6–13, 2026
+// ============================================================================
+const TRIP_START = new Date(2026, 5, 6);   // months are 0-indexed: 5 = June
+const TRIP_END   = new Date(2026, 5, 13);
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+
+function updateCountdown() {
+  const today = startOfDay(new Date());
+  const num = document.getElementById("countdown-num");
+  const lbl = document.getElementById("countdown-lbl");
+  const pill = document.getElementById("countdown-pill");
+  if (!num || !lbl || !pill) return;
+
+  pill.classList.remove("during-trip", "past-trip");
+
+  const daysUntil = Math.round((TRIP_START - today) / MS_PER_DAY);
+  const daysPast  = Math.round((today - TRIP_END)  / MS_PER_DAY);
+
+  if (daysUntil > 1) {
+    num.textContent = daysUntil;
+    lbl.textContent = "days until OBX";
+  } else if (daysUntil === 1) {
+    num.textContent = "Tomorrow!";
+    lbl.textContent = "— pack the car 🚗";
+  } else if (daysUntil === 0) {
+    num.textContent = "Today's";
+    lbl.textContent = "the day! 🏖️";
+    pill.classList.add("during-trip");
+  } else if (daysPast <= 0) {
+    const dayNum = Math.round((today - TRIP_START) / MS_PER_DAY) + 1;
+    num.textContent = "Day " + dayNum;
+    lbl.textContent = "of 8 at OBX 🌊";
+    pill.classList.add("during-trip");
+  } else {
+    num.textContent = "🌞";
+    lbl.textContent = "Trip complete — hope it was great!";
+    pill.classList.add("past-trip");
+  }
+}
+
+// Re-check at midnight so the countdown ticks without a page reload
+function scheduleCountdownMidnight() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 5);
+  setTimeout(() => { updateCountdown(); scheduleCountdownMidnight(); }, next - now);
+}
+
+// ============================================================================
+//  WEATHER — Hatteras, NC (Open-Meteo, no API key)
+// ============================================================================
+const HATTERAS_LAT = 35.22, HATTERAS_LON = -75.69;
+
+function weatherIcon(code) {
+  if (code === 0) return "☀️";
+  if (code === 1) return "🌤️";
+  if (code === 2) return "⛅";
+  if (code === 3) return "☁️";
+  if (code === 45 || code === 48) return "🌫️";
+  if (code >= 51 && code <= 57) return "🌦️";
+  if (code >= 61 && code <= 67) return "🌧️";
+  if (code >= 71 && code <= 77) return "🌨️";
+  if (code >= 80 && code <= 82) return "🌧️";
+  if (code >= 85 && code <= 86) return "🌨️";
+  if (code >= 95 && code <= 99) return "⛈️";
+  return "🌡️";
+}
+
+async function fetchWeather() {
+  const el = document.getElementById("weather-days");
+  if (!el) return;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${HATTERAS_LAT}&longitude=${HATTERAS_LON}`
+    + "&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max"
+    + "&temperature_unit=fahrenheit&timezone=America/New_York&forecast_days=7";
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("bad status " + resp.status);
+    const data = await resp.json();
+    const days = data.daily.time;
+    const tStart = TRIP_START.getTime(), tEnd = TRIP_END.getTime();
+    let html = "";
+    days.forEach((d, i) => {
+      const date = new Date(d + "T12:00:00");
+      const dayName = date.toLocaleDateString("en-US", { weekday: "short" });
+      const dayNum = date.getDate();
+      const hi = Math.round(data.daily.temperature_2m_max[i]);
+      const lo = Math.round(data.daily.temperature_2m_min[i]);
+      const icon = weatherIcon(data.daily.weathercode[i]);
+      const pop = data.daily.precipitation_probability_max[i] || 0;
+      const isTripDay = date.getTime() >= tStart && date.getTime() <= tEnd;
+      html += `<div class="weather-day${isTripDay ? ' trip-day' : ''}" title="${date.toDateString()}">
+        <div class="wd-day">${dayName} ${dayNum}</div>
+        <div class="wd-icon">${icon}</div>
+        <div class="wd-temp">${hi}° <span class="wd-low">/ ${lo}°</span></div>
+        ${pop >= 30 ? `<div class="wd-pop">💧${pop}%</div>` : ''}
+      </div>`;
+    });
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="weather-error">Couldn\'t load forecast — <a href="https://forecast.weather.gov/MapClick.php?lat=35.22&lon=-75.69" target="_blank" rel="noopener">check weather.gov ↗</a></div>';
+  }
+}
+
+// ============================================================================
+//  INIT
+// ============================================================================
+loadState();
+maybeLoadFromHash();
+render();
+updateCountdown();
+scheduleCountdownMidnight();
+fetchWeather();
+</script>
+
+</body>
+</html>
