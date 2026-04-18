@@ -1,0 +1,48 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Rounded background (iOS will re-mask, but this keeps non-iOS browsers clean) -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fdf9f0"/>
+      <stop offset="1" stop-color="#f2e6c8"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a7f8e"/>
+      <stop offset="1" stop-color="#1f6675"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#sky)"/>
+
+  <!-- Sun -->
+  <circle cx="395" cy="130" r="46" fill="#d6b170"/>
+  <circle cx="395" cy="130" r="60" fill="#d6b170" opacity="0.25"/>
+
+  <!-- Roof -->
+  <polygon points="78,242 256,86 434,242" fill="#0f2338"/>
+
+  <!-- Eave trim (cream line under roof) -->
+  <rect x="118" y="232" width="276" height="14" fill="#fdf9f0"/>
+
+  <!-- House body -->
+  <rect x="128" y="246" width="256" height="160" fill="#1e3a5f"/>
+
+  <!-- Windows (warm glow) -->
+  <rect x="158" y="278" width="62" height="64" fill="#d6b170" rx="3"/>
+  <path d="M 189 278 L 189 342 M 158 310 L 220 310" stroke="#1e3a5f" stroke-width="6"/>
+
+  <rect x="292" y="278" width="62" height="64" fill="#d6b170" rx="3"/>
+  <path d="M 323 278 L 323 342 M 292 310 L 354 310" stroke="#1e3a5f" stroke-width="6"/>
+
+  <!-- Door -->
+  <rect x="232" y="348" width="48" height="58" fill="#c76b3a" rx="3"/>
+  <circle cx="269" cy="380" r="4" fill="#fdf9f0"/>
+
+  <!-- Stilts (beach-house style) -->
+  <rect x="142" y="406" width="10" height="18" fill="#0f2338"/>
+  <rect x="251" y="406" width="10" height="18" fill="#0f2338"/>
+  <rect x="360" y="406" width="10" height="18" fill="#0f2338"/>
+
+  <!-- Waves / water -->
+  <path d="M 0 424 Q 64 412 128 424 T 256 424 T 384 424 T 512 424 L 512 512 L 0 512 Z" fill="url(#water)"/>
+  <path d="M 0 458 Q 64 446 128 458 T 256 458 T 384 458 T 512 458 L 512 488 L 0 488 Z" fill="#fdf9f0" opacity="0.25"/>
+</svg>
